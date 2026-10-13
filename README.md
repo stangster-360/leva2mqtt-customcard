@@ -73,8 +73,9 @@ python3 -m http.server   # then open http://localhost:8000/dev/index.html
 `dev/index.html` renders the card against a fake `hass` with the entity ids of a bridge
 named "Silvia Test" and can simulate a shot.
 
-A tag `v*` builds the bundle and publishes a GitHub release with it; HACS installs from
-the latest release.
+To release, publish a GitHub release with a new tag `v*` (or push such a tag). The
+workflow builds the bundle and attaches `leva2mqtt-customcard.js` to the release; HACS
+installs from the latest release.
 
 ## Not verified yet
 

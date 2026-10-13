@@ -5,6 +5,9 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  # A release published on GitHub (with a new tag) gets the bundle attached.
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -26,9 +29,10 @@ jobs:
         with:
           name: leva2mqtt-customcard
           path: dist/leva2mqtt-customcard.js
-      # A tag publishes a release with the bundle; HACS installs from the latest release.
+      # A pushed tag creates the release, a published release is completed; either way the
+      # bundle is attached. HACS installs from the latest release.
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/leva2mqtt-customcard.js
-          generate_release_notes: true
+          generate_release_notes: ${{ github.event_name == 'push' }}
