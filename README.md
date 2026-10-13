@@ -7,6 +7,23 @@ and leva! firmware).
 > **Status: first scaffold, not yet run inside Home Assistant.** It renders against a fake
 > `hass` object (`dev/index.html`) and the unit tests pass.
 
+| Ready | Brewing |
+|---|---|
+| ![Card while ready: boiler gauge with ready band, last shot curve](docs/images/card-ready.png) | ![Card while brewing: pressure gauge, weight ring and live curve](docs/images/card-brewing.png) |
+
+| Light theme | Standby |
+|---|---|
+| ![Card in the light theme](docs/images/card-ready-light.png) | ![Card in standby with the wake button](docs/images/card-standby.png) |
+
+Compact layout:
+
+![Compact card while ready](docs/images/card-compact-ready.png)
+![Compact card while brewing](docs/images/card-compact-brewing.png)
+
+The screenshots are rendered from `dev/index.html` with sample values (the curve is
+synthetic, modelled on a 21.4 s / 42.3 g shot), not from a live machine. Icons there come
+from `@mdi/js`; inside Home Assistant the card uses `ha-icon`.
+
 ## What it shows
 
 - **The ring is the gauge.** Awake: boiler temperature in a ±6 K window around the setpoint,
@@ -71,7 +88,8 @@ python3 -m http.server   # then open http://localhost:8000/dev/index.html
 ```
 
 `dev/index.html` renders the card against a fake `hass` with the entity ids of a bridge
-named "Silvia Test" and can simulate a shot.
+named "Silvia Test" and can simulate a shot; `?theme=light` switches to the light theme.
+The screenshots in `docs/images/` are taken from this page.
 
 To release, publish a GitHub release with a new tag `v*` (or push such a tag). The
 workflow builds the bundle and attaches `leva2mqtt-customcard.js` to the release; HACS

@@ -8,20 +8,37 @@
   /* stand-ins for the Home Assistant theme and elements */
   :root { color-scheme: dark; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b;
           --primary-color: #03a9f4; --ha-card-background: #1c1c1c; }
-  body { margin: 0; padding: 24px; background: #111; color: var(--primary-text-color);
+  body { margin: 0; padding: 24px; background: var(--dev-bg, #111); color: var(--primary-text-color);
          font-family: Roboto, system-ui, sans-serif; display: grid; gap: 24px;
          grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 520px)); }
   .bar { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
   .bar button { padding: 8px 14px; border-radius: 8px; border: 1px solid #333; background: #222; color: inherit; }
 </style>
 <script>
+  // ?theme=light switches the stand-in theme to Home Assistant's light defaults.
+  if (new URLSearchParams(location.search).get("theme") === "light") {
+    const r = document.documentElement.style;
+    r.colorScheme = "light";
+    r.setProperty("--primary-text-color", "#212121");
+    r.setProperty("--secondary-text-color", "#727272");
+    r.setProperty("--ha-card-background", "#ffffff");
+    r.setProperty("--dev-bg", "#fafafa");
+    r.setProperty("--dev-border", "#e0e0e0");
+  }
+</script>
+<script type="module">
   // Minimal ha-card / ha-icon so the card renders outside Home Assistant.
+  import * as mdi from "../node_modules/@mdi/js/mdi.js";
   customElements.define("ha-card", class extends HTMLElement {
     connectedCallback() { Object.assign(this.style, { display: "flex", background: "var(--ha-card-background)",
-      border: "1px solid #2a2a2a", borderRadius: "12px" }); if (!this.classList.contains("compact")) this.style.flexDirection = "column"; }
+      border: "1px solid var(--dev-border, #2a2a2a)", borderRadius: "12px" }); if (!this.classList.contains("compact")) this.style.flexDirection = "column"; }
   });
   customElements.define("ha-icon", class extends HTMLElement {
-    connectedCallback() { this.textContent = "●"; }
+    connectedCallback() {
+      const name = "mdi" + (this.getAttribute("icon") ?? "").replace("mdi:", "").split("-").map((s) => s[0].toUpperCase() + s.slice(1)).join("");
+      const path = mdi[name] ?? "";
+      this.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" style="display:block"><path fill="currentColor" d="${path}"></path></svg>`;
+    }
   });
 </script>
 <script type="module" src="../dist/leva2mqtt-customcard.js"></script>
