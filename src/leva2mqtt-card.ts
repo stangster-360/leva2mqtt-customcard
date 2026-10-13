@@ -2,6 +2,7 @@ import { LitElement, html, nothing, svg, type PropertyValues, type TemplateResul
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./editor";
+import "./trend-card";
 import { deviceEntityIds, matchEntities, type EntityMap, type Key } from "./entities";
 import { numberFormat, translator, type StringKey } from "./i18n";
 import { LABEL_HI, LABEL_LO, SIZE, ringModel, type RingModel } from "./ring";
@@ -477,21 +478,44 @@ export class Leva2MqttCard extends LitElement {
   }
 }
 
+/** The same card in its one-row layout, listed separately in the card picker. */
+@customElement("leva2mqtt-compact-card")
+export class Leva2MqttCompactCard extends Leva2MqttCard {
+  setConfig(config: CardConfig): void {
+    super.setConfig({ compact: true, ...config });
+  }
+}
+
 declare global {
   interface Window {
     customCards?: { type: string; name: string; description: string; preview?: boolean }[];
   }
   interface HTMLElementTagNameMap {
     "leva2mqtt-card": Leva2MqttCard;
+    "leva2mqtt-compact-card": Leva2MqttCompactCard;
   }
 }
 
 window.customCards = window.customCards ?? [];
-window.customCards.push({
-  type: "leva2mqtt-card",
-  name: "leva2mqtt espresso card",
-  description: "Live state, shot curve and controls of an espresso machine bridged by leva2mqtt.",
-  preview: true,
-});
+window.customCards.push(
+  {
+    type: "leva2mqtt-card",
+    name: "leva2mqtt espresso card",
+    description: "Live state, shot curve and controls of an espresso machine bridged by leva2mqtt.",
+    preview: true,
+  },
+  {
+    type: "leva2mqtt-compact-card",
+    name: "leva2mqtt espresso card (compact)",
+    description: "One row: state, boiler or pressure gauge, last shot and a wake / standby button.",
+    preview: true,
+  },
+  {
+    type: "leva2mqtt-trend-card",
+    name: "leva2mqtt boiler trend",
+    description: "Boiler temperature, heater output, plug power and stability over time, with shots marked.",
+    preview: true,
+  },
+);
 
 console.info(`%c leva2mqtt-card %c ${VERSION} `, "background:#d9963f;color:#1c140f", "");

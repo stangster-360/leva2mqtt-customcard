@@ -48,4 +48,6 @@ export interface CardConfig {
   /** Optional smart plug the machine hangs on. */
   power_switch?: string;
   power_sensor?: string;
+  /** Trend card: time window in hours (default 1). */
+  hours?: number;
 }

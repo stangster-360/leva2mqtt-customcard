@@ -43,6 +43,12 @@ const STRINGS = {
     compact: "Compact layout",
     power_switch: "Smart plug (switch)",
     power_sensor: "Smart plug power (sensor)",
+    hours: "Time window (h)",
+    trend: "Boiler trend",
+    spread: "Spread",
+    shot: "Shot",
+    asleep: "Standby / eco",
+    ready_band_short: "Ready band",
   },
   de: {
     "state.offline": "Offline",
@@ -87,6 +93,12 @@ const STRINGS = {
     compact: "Kompakte Darstellung",
     power_switch: "Steckdose (Schalter)",
     power_sensor: "Steckdose Leistung (Sensor)",
+    hours: "Zeitfenster (h)",
+    trend: "Kesselverlauf",
+    spread: "Streuung",
+    shot: "Shot",
+    asleep: "Standby / Eco",
+    ready_band_short: "Bereit-Band",
   },
 } as const;
 

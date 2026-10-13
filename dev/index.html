@@ -50,13 +50,17 @@
   <button id="standby">Standby</button>
 </div>
 <leva2mqtt-card id="full"></leva2mqtt-card>
-<leva2mqtt-card id="compact"></leva2mqtt-card>
+<div style="display: grid; gap: 24px; align-content: start">
+  <leva2mqtt-compact-card id="compact"></leva2mqtt-compact-card>
+  <leva2mqtt-trend-card id="trend"></leva2mqtt-trend-card>
+</div>
 <script type="module">
   // Fake hass with the entity ids a bridge named "Silvia Test" creates. Values follow
-  // the 13.10. shot (21.4 s / 42.3 g); the curve itself is synthetic.
+  // the 13.10. shot (21.4 s / 42.3 g); all curves and the history are synthetic.
   const P = "silvia_test";
   const now = Date.now() / 1000;
   const shotStart = now - 38 * 60;
+  const shots = [shotStart, now - 14 * 60];
   const ids = {
     state: `sensor.${P}_state`, temperature: `sensor.${P}_boiler_temperature`, setpoint: `sensor.${P}_setpoint`,
     heater: `sensor.${P}_heater_output`, spread: `sensor.${P}_heater_average_spread`, pressure: `sensor.${P}_brew_pressure`,
@@ -65,9 +69,27 @@
     dose: `number.${P}_dose`, bean: `text.${P}_bean`, grind: `text.${P}_grinder_setting`,
     wake: `button.${P}_wake`, eco: `button.${P}_eco`, standby: `button.${P}_standby`, report: `button.${P}_beep_setpoint`,
   };
+  // a smart plug that is not part of the bridge's device
+  const plug = { power: "sensor.silvia_plug_power", switch: "switch.silvia_plug" };
+
   const pres = (t) => t < 4 ? 2.5 * t / 4 : t < 7 ? 2.5 + 6.6 * (t - 4) / 3 : t < 21.4 ? 9.1 - 3.9 * (t - 7) / 14.4 : t < 22.6 ? 5.2 * (1 - (t - 21.4) / 1.2) : 0;
   const wt = (t) => { if (t < 6.8) return 0; const u = Math.min(1, (t - 6.8) / 17.7); return 42.3 * (0.35 * u + 0.65 * u * u * (3 - 2 * u)); };
   const fl = (t) => t < 6.8 ? 0 : Math.max(0, (wt(t + 0.4) - wt(Math.max(6.8, t - 0.4))) / 0.8);
+
+  // boiler history around the two shots (absolute time in s)
+  const since = (ta) => shots.map((s) => ta - s).filter((d) => d >= 0).sort((a, b) => a - b)[0];
+  const temp = (ta) => {
+    const n = 0.06 * Math.sin(ta / 9) + 0.04 * Math.sin(ta / 31);
+    const d = since(ta);
+    if (d === undefined || d > 900) return 90 + n;
+    if (d < 30) return 90 - 1.6 * d / 30 + n;
+    if (d < 150) return 88.4 + 3.2 * (d - 30) / 120 + n;
+    return 90 + 1.6 * Math.exp(-(d - 150) / 110) * Math.cos((d - 150) / 60) + n;
+  };
+  const heater = (ta) => { const d = since(ta); if (d !== undefined && d < 130) return 100; if (d !== undefined && d < 300) return 0; return 8 + 2 * Math.sin(ta / 47); };
+  const power = (ta) => { const d = since(ta); return heater(ta) * 11 + (d !== undefined && d < 21.4 ? 48 : 0) + 1.2; };
+  const spread = (ta) => { const m = Math.floor(ta / 60) * 60; const d = since(m); if (d !== undefined && d < 60) return 6.1; if (d !== undefined && d < 600) return 6.1 * Math.exp(-(d - 60) / 90) + 0.3; return 0.3 + 0.1 * Math.sin(m / 300); };
+  const stateAt = (ta) => shots.some((s) => ta >= s && ta < s + 21.4) ? "brewing" : "ready";
 
   const values = {
     state: "ready", temperature: "90.1", setpoint: "90.0", heater: "8", spread: "0.4", pressure: "0.0",
@@ -78,34 +100,56 @@
   const lastShotAttrs = { kind: "shot", duration: 21.4, yield: 42.3, ratio: 2.35, peak_pressure: 9.1,
     first_drop: 6.8, profile: "GEN.LEVER", dose: 18, visualizer_url: "https://visualizer.coffee" };
 
-  function hass() {
-    const states = {};
-    for (const [k, id] of Object.entries(ids)) {
-      states[id] = { entity_id: id, state: values[k], attributes: k === "last_shot" ? lastShotAttrs : {},
-        last_changed: "", last_updated: "" };
+  function history(msg) {
+    const start = Date.parse(msg.start_time) / 1000;
+    const end = Date.parse(msg.end_time) / 1000;
+    const out = {};
+    for (const id of msg.entity_ids) {
+      out[id] = [];
+      if (id === ids.pressure || id === ids.weight || id === ids.flow) {
+        const fn = id === ids.pressure ? pres : id === ids.weight ? wt : fl;
+        for (let t = 0; t <= 27; t += 0.25) out[id].push({ s: fn(t).toFixed(2), lu: shotStart + t });
+        continue;
+      }
+      if (id === ids.setpoint) { out[id].push({ s: "90.0", lu: start }); continue; }
+      if (id === ids.state) {
+        let last;
+        for (let ta = start; ta <= end; ta += 1) { const s = stateAt(ta); if (s !== last) out[id].push({ s, lu: ta }); last = s; }
+        continue;
+      }
+      const fn = { [ids.temperature]: temp, [ids.heater]: heater, [plug.power]: power, [ids.spread]: spread }[id];
+      if (!fn) continue;
+      const step = id === ids.spread ? 60 : Math.max(5, (end - start) / 2000);
+      for (let ta = start; ta <= end; ta += step) out[id].push({ s: fn(ta).toFixed(2), lu: ta });
     }
+    return out;
+  }
+
+  function hass() {
+    const stamp = new Date().toISOString();
+    const states = {};
+    const put = (id, state, attributes = {}) => { states[id] = { entity_id: id, state, attributes, last_changed: stamp, last_updated: stamp }; };
+    for (const [k, id] of Object.entries(ids)) put(id, values[k], k === "last_shot" ? lastShotAttrs : {});
+    put(plug.power, values.state === "brewing" ? "1150" : values.state === "standby" ? "1.2" : "115.3");
+    put(plug.switch, "on");
     const entities = {};
     for (const id of Object.values(ids)) entities[id] = { entity_id: id, device_id: "dev1", platform: "mqtt" };
+    for (const id of Object.values(plug)) entities[id] = { entity_id: id, device_id: "plug1", platform: "shelly" };
     return {
       states, entities, devices: { dev1: { id: "dev1", name: "Silvia Test" } }, locale: { language: "de" },
       callService: async (d, s, data) => console.log("service", d, s, data),
-      callWS: async (msg) => {
-        const out = {};
-        for (const id of msg.entity_ids) {
-          const fn = id === ids.pressure ? pres : id === ids.weight ? wt : fl;
-          out[id] = [];
-          for (let t = 0; t <= 27; t += 0.25) out[id].push({ s: fn(t).toFixed(2), lu: shotStart + t });
-        }
-        return out;
-      },
+      callWS: async (msg) => history(msg),
     };
   }
 
   const full = document.getElementById("full");
   const compact = document.getElementById("compact");
-  full.setConfig({ type: "custom:leva2mqtt-card", device_id: "dev1", target_ratio: 2 });
-  compact.setConfig({ type: "custom:leva2mqtt-card", device_id: "dev1", compact: true });
-  const push = () => { const h = hass(); full.hass = h; compact.hass = h; };
+  const trend = document.getElementById("trend");
+  full.setConfig({ type: "custom:leva2mqtt-card", device_id: "dev1", target_ratio: 2,
+    power_switch: plug.switch, power_sensor: plug.power });
+  compact.setConfig({ type: "custom:leva2mqtt-compact-card", device_id: "dev1" });
+  trend.setConfig({ type: "custom:leva2mqtt-trend-card", device_id: "dev1", hours: 1, power_sensor: plug.power });
+  const push = () => { const h = hass(); full.hass = h; compact.hass = h; trend.hass = h; };
   push();
 
   let timer;
