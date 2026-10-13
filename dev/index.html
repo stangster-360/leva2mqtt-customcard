@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>leva2mqtt card – dev</title>
+<style>
+  /* stand-ins for the Home Assistant theme and elements */
+  :root { color-scheme: dark; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b;
+          --primary-color: #03a9f4; --ha-card-background: #1c1c1c; }
+  body { margin: 0; padding: 24px; background: #111; color: var(--primary-text-color);
+         font-family: Roboto, system-ui, sans-serif; display: grid; gap: 24px;
+         grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 520px)); }
+  .bar { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+  .bar button { padding: 8px 14px; border-radius: 8px; border: 1px solid #333; background: #222; color: inherit; }
+</style>
+<script>
+  // Minimal ha-card / ha-icon so the card renders outside Home Assistant.
+  customElements.define("ha-card", class extends HTMLElement {
+    connectedCallback() { Object.assign(this.style, { display: "flex", background: "var(--ha-card-background)",
+      border: "1px solid #2a2a2a", borderRadius: "12px" }); if (!this.classList.contains("compact")) this.style.flexDirection = "column"; }
+  });
+  customElements.define("ha-icon", class extends HTMLElement {
+    connectedCallback() { this.textContent = "●"; }
+  });
+</script>
+<script type="module" src="../dist/leva2mqtt-customcard.js"></script>
+</head>
+<body>
+<div class="bar">
+  <button id="ready">Bereit</button>
+  <button id="brew">Bezug simulieren</button>
+  <button id="standby">Standby</button>
+</div>
+<leva2mqtt-card id="full"></leva2mqtt-card>
+<leva2mqtt-card id="compact"></leva2mqtt-card>
+<script type="module">
+  // Fake hass with the entity ids a bridge named "Silvia Test" creates. Values follow
+  // the 13.10. shot (21.4 s / 42.3 g); the curve itself is synthetic.
+  const P = "silvia_test";
+  const now = Date.now() / 1000;
+  const shotStart = now - 38 * 60;
+  const ids = {
+    state: `sensor.${P}_state`, temperature: `sensor.${P}_boiler_temperature`, setpoint: `sensor.${P}_setpoint`,
+    heater: `sensor.${P}_heater_output`, spread: `sensor.${P}_heater_average_spread`, pressure: `sensor.${P}_brew_pressure`,
+    weight: `sensor.${P}_weight`, flow: `sensor.${P}_flow_by_weight`, pump_time: `sensor.${P}_pump_time`,
+    profile: `sensor.${P}_profile`, alert: `sensor.${P}_maintenance_alerts`, last_shot: `sensor.${P}_last_shot`,
+    dose: `number.${P}_dose`, bean: `text.${P}_bean`, grind: `text.${P}_grinder_setting`,
+    wake: `button.${P}_wake`, eco: `button.${P}_eco`, standby: `button.${P}_standby`, report: `button.${P}_beep_setpoint`,
+  };
+  const pres = (t) => t < 4 ? 2.5 * t / 4 : t < 7 ? 2.5 + 6.6 * (t - 4) / 3 : t < 21.4 ? 9.1 - 3.9 * (t - 7) / 14.4 : t < 22.6 ? 5.2 * (1 - (t - 21.4) / 1.2) : 0;
+  const wt = (t) => { if (t < 6.8) return 0; const u = Math.min(1, (t - 6.8) / 17.7); return 42.3 * (0.35 * u + 0.65 * u * u * (3 - 2 * u)); };
+  const fl = (t) => t < 6.8 ? 0 : Math.max(0, (wt(t + 0.4) - wt(Math.max(6.8, t - 0.4))) / 0.8);
+
+  const values = {
+    state: "ready", temperature: "90.1", setpoint: "90.0", heater: "8", spread: "0.4", pressure: "0.0",
+    weight: "0.0", flow: "0.0", pump_time: "21.4", profile: "GEN.LEVER", alert: "none",
+    last_shot: new Date(shotStart * 1000).toISOString(), dose: "18.0", bean: "Kenia Kiambu AA", grind: "2.4",
+    wake: "unknown", eco: "unknown", standby: "unknown", report: "unknown",
+  };
+  const lastShotAttrs = { kind: "shot", duration: 21.4, yield: 42.3, ratio: 2.35, peak_pressure: 9.1,
+    first_drop: 6.8, profile: "GEN.LEVER", dose: 18, visualizer_url: "https://visualizer.coffee" };
+
+  function hass() {
+    const states = {};
+    for (const [k, id] of Object.entries(ids)) {
+      states[id] = { entity_id: id, state: values[k], attributes: k === "last_shot" ? lastShotAttrs : {},
+        last_changed: "", last_updated: "" };
+    }
+    const entities = {};
+    for (const id of Object.values(ids)) entities[id] = { entity_id: id, device_id: "dev1", platform: "mqtt" };
+    return {
+      states, entities, devices: { dev1: { id: "dev1", name: "Silvia Test" } }, locale: { language: "de" },
+      callService: async (d, s, data) => console.log("service", d, s, data),
+      callWS: async (msg) => {
+        const out = {};
+        for (const id of msg.entity_ids) {
+          const fn = id === ids.pressure ? pres : id === ids.weight ? wt : fl;
+          out[id] = [];
+          for (let t = 0; t <= 27; t += 0.25) out[id].push({ s: fn(t).toFixed(2), lu: shotStart + t });
+        }
+        return out;
+      },
+    };
+  }
+
+  const full = document.getElementById("full");
+  const compact = document.getElementById("compact");
+  full.setConfig({ type: "custom:leva2mqtt-card", device_id: "dev1", target_ratio: 2 });
+  compact.setConfig({ type: "custom:leva2mqtt-card", device_id: "dev1", compact: true });
+  const push = () => { const h = hass(); full.hass = h; compact.hass = h; };
+  push();
+
+  let timer;
+  document.getElementById("ready").onclick = () => { clearInterval(timer); Object.assign(values, { state: "ready", temperature: "90.1" }); push(); };
+  document.getElementById("standby").onclick = () => { clearInterval(timer); Object.assign(values, { state: "standby", temperature: "41.7" }); push(); };
+  document.getElementById("brew").onclick = () => {
+    clearInterval(timer);
+    let t = 0;
+    timer = setInterval(() => {
+      t += 0.25;
+      if (t > 21.4) { clearInterval(timer); Object.assign(values, { state: "ready", pressure: "0.0" }); push(); return; }
+      Object.assign(values, { state: "brewing", pump_time: t.toFixed(2), pressure: pres(t).toFixed(2),
+        weight: wt(t).toFixed(2), flow: fl(t).toFixed(2), temperature: (90 - Math.min(1.6, t / 8)).toFixed(2) });
+      push();
+    }, 250);
+  };
+</script>
+</body>
+</html>
