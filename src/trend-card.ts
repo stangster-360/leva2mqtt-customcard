@@ -33,7 +33,7 @@ interface Data {
 
 const empty = (): Data => ({ temperature: [], setpoint: [], heater: [], spread: [], power: [], states: [] });
 
-const WINDOWS = [0.25, 1, 6, 24];
+const WINDOWS = [5 / 60, 0.25, 1, 6, 24];
 const W = 600;
 const L = 40;
 const R = 590;
@@ -281,7 +281,8 @@ export class Leva2MqttTrendCard extends LitElement {
     const strips = this.strips();
     const bottom = strips[strips.length - 1].top + strips[strips.length - 1].height;
     const H = bottom + 22;
-    const x = (tt: number) => L + ((R - L) * (tt - t0)) / (t1 - t0);
+    // clamped, so the point before the window starts the line at the left edge
+    const x = (tt: number) => L + ((R - L) * (Math.min(Math.max(tt, t0), t1) - t0)) / (t1 - t0);
     const d = this.data;
     const band = this.config.ready_band ?? 0.5;
 
@@ -291,7 +292,12 @@ export class Leva2MqttTrendCard extends LitElement {
 
     const hoverT = this.hoverT;
     const at = (k: SeriesKey) => valueAt(d[k], hoverT ?? t1);
-    const timeFmt = new Intl.DateTimeFormat(this.language, { hour: "2-digit", minute: "2-digit" });
+    // short windows need seconds to tell the ticks and the crosshair apart
+    const timeFmt = new Intl.DateTimeFormat(this.language, {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(this.hours < 0.25 ? { second: "2-digit" } : {}),
+    });
 
     const shade = (match: (s: string) => boolean, color: string, opacity: number) =>
       spans(d.states, match, t0, t1).map(
@@ -355,7 +361,7 @@ export class Leva2MqttTrendCard extends LitElement {
         <div class="tabs" role="group" aria-label=${t("hours")}>
           ${WINDOWS.map(
             (h) => html`<button aria-pressed=${String(this.hours === h)} @click=${() => (this.hours = h)}>
-              ${h < 1 ? `${h * 60} min` : `${h} h`}
+              ${h < 1 ? `${Math.round(h * 60)} min` : `${h} h`}
             </button>`,
           )}
         </div>

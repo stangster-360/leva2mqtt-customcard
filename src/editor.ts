@@ -34,7 +34,7 @@ const TREND_SCHEMA = [
     type: "grid",
     name: "",
     schema: [
-      { name: "hours", selector: { number: { min: 0.25, max: 24, step: 0.25, mode: "box", unit_of_measurement: "h" } } },
+      { name: "hours", selector: { number: { min: 0.05, max: 24, step: 0.05, mode: "box", unit_of_measurement: "h" } } },
       { name: "ready_band", selector: { number: { min: 0.1, max: 2, step: 0.1, mode: "box" } } },
     ],
   },

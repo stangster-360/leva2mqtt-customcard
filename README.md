@@ -60,7 +60,7 @@ The **boiler trend** stacks strips on one time axis, like a trend display in a c
 room: boiler temperature with setpoint and ready band, heater output, plug power (when a
 power sensor is configured) and the spread of the per-minute heater averages with the
 1.0 %-point limit the bridge uses for "ready". Shots, steam and standby / eco are shaded.
-Moving the pointer shows all values at that moment. The window (15 min, 1 h, 6 h, 24 h)
+Moving the pointer shows all values at that moment. The window (5 min, 15 min, 1 h, 6 h, 24 h)
 can be switched on the card; the data comes from the recorder and is extended live.
 
 Entities the machine does not have are left out, as the bridge leaves them out.
@@ -95,7 +95,7 @@ Boiler trend:
 ```yaml
 type: custom:leva2mqtt-trend-card
 device_id: 0123456789abcdef
-hours: 1                         # start window, switchable on the card
+hours: 1                         # start window, switchable on the card (5 min = 0.0833)
 ready_band: 0.5
 power_sensor: sensor.silvia_plug_power   # optional
 ```
